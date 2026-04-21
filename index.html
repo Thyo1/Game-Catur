@@ -26,15 +26,21 @@
         </div>
     </div>
 
+    <div id="game-over-modal" class="modal-container hidden">
+        <div class="modal-content">
+            <h2 id="winner-title">SKAKMAT!</h2>
+            <p id="winner-message">Putih memenangkan pertandingan.</p>
+            <button class="menu-btn" style="margin: 0 auto;" onclick="backToMenuFromModal()">Main Lagi</button>
+        </div>
+    </div>
+
     <div id="game-screen" class="main-wrapper hidden">
         
         <div class="header-section">
             <div class="top-controls">
                 <button class="btn-toggle" onclick="backToMenu()">⬅ Menu</button>
                 <div class="status-badge" id="turn-status">Turn: <span>PUTIH</span></div>
-                
                 <div class="timer match-timer" id="match-timer">00:00</div>
-                
                 <button id="toggle-view" class="btn-toggle">Mode: 3D</button>
             </div>
             
@@ -54,7 +60,6 @@
                 <div class="graveyard-box" id="dead-black-bin"></div> 
             </div>
         </div>
-
     </div>
 
     <script src="script.js"></script>

@@ -1,7 +1,7 @@
 // ==========================================
 // DEKLARASI VARIABEL & ELEMEN HTML
 // ==========================================
-console.log("♟️ Chess Elite Engine v1.0 - Developed by Tio Syahputra");
+console.log("♟️ Chess Elite Engine v1.0 (FIDE Rules) - Developed by Tio Syahputra");
 
 const boardElement = document.getElementById('chessboard');
 const turnStatus = document.getElementById('turn-status').querySelector('span');
@@ -10,6 +10,10 @@ const deadBlackBin = document.getElementById('dead-black-bin');
 const toggleBtn = document.getElementById('toggle-view');
 const timerDisplay = document.getElementById('match-timer');
 const aiLoading = document.getElementById('ai-loading');
+
+const gameOverModal = document.getElementById('game-over-modal');
+const winnerTitle = document.getElementById('winner-title');
+const winnerMessage = document.getElementById('winner-message');
 
 let matchTime = 0;
 let timerInterval = null;
@@ -22,12 +26,13 @@ let thyoValidMoves = [];
 let is3DMode = true; 
 let thyoMode = '';
 let botLevel = 2; 
+let isGameOver = false;
 
 let deadWhitePieces = {};
 let deadBlackPieces = {};
 
 // ==========================================
-// LOGIKA MENU NAVIGASI
+// LOGIKA MENU & GAME OVER UI
 // ==========================================
 function showBotMenu() {
     document.getElementById('main-menu-buttons').classList.add('hidden');
@@ -39,17 +44,12 @@ function hideBotMenu() {
     document.getElementById('main-menu-buttons').classList.remove('hidden');
 }
 
-function startBotGame(level) {
-    botLevel = level;
-    startGame('bot');
-}
+function startBotGame(level) { botLevel = level; startGame('bot'); }
 
 function startGame(mode) {
     thyoMode = mode;
-    if (mode === 'online') {
-        alert('Fitur Online sedang disiapkan servernya!');
-        return; 
-    }
+    if (mode === 'online') { alert('Fitur Online sedang disiapkan servernya!'); return; }
+    
     document.getElementById('main-menu').classList.add('hidden');
     document.getElementById('game-screen').classList.remove('hidden');
     hideBotMenu(); 
@@ -61,6 +61,19 @@ function backToMenu() {
     document.getElementById('main-menu').classList.remove('hidden');
     clearInterval(timerInterval);
     timerInterval = null;
+}
+
+function backToMenuFromModal() {
+    gameOverModal.classList.add('hidden');
+    backToMenu();
+}
+
+function showGameOver(title, message) {
+    isGameOver = true;
+    clearInterval(timerInterval);
+    winnerTitle.textContent = title;
+    winnerMessage.textContent = message;
+    gameOverModal.classList.remove('hidden');
 }
 
 function resetGame() {
@@ -78,13 +91,15 @@ function resetGame() {
     selectedSquare = null;
     thyoValidMoves = [];
     matchTime = 0; 
+    isGameOver = false;
     
     deadWhitePieces = {};
     deadBlackPieces = {};
     renderGraveyard();
     
     aiLoading.classList.add('hidden'); 
-    turnStatus.textContent = thyoTurn.toUpperCase();
+    gameOverModal.classList.add('hidden');
+    turnStatus.innerHTML = thyoTurn.toUpperCase();
     turnStatus.style.color = '#f6d365';
     
     updateTimerDisplay();
@@ -102,15 +117,7 @@ function updateTimerDisplay() {
 
 function startTimer() {
     clearInterval(timerInterval);
-    timerInterval = setInterval(() => {
-        matchTime++;
-        updateTimerDisplay();
-    }, 1000);
-}
-
-function gameOver(message) {
-    clearInterval(timerInterval);
-    setTimeout(() => { alert(message); backToMenu(); }, 100);
+    timerInterval = setInterval(() => { matchTime++; updateTimerDisplay(); }, 1000);
 }
 
 // ==========================================
@@ -118,18 +125,13 @@ function gameOver(message) {
 // ==========================================
 function addDeadPiece(piece) {
     let color = getPieceColor(piece);
-    if (color === 'putih') {
-        deadWhitePieces[piece] = (deadWhitePieces[piece] || 0) + 1;
-    } else {
-        deadBlackPieces[piece] = (deadBlackPieces[piece] || 0) + 1;
-    }
+    if (color === 'putih') deadWhitePieces[piece] = (deadWhitePieces[piece] || 0) + 1;
+    else deadBlackPieces[piece] = (deadBlackPieces[piece] || 0) + 1;
     renderGraveyard();
 }
 
 function renderGraveyard() {
-    deadWhiteBin.innerHTML = '';
-    deadBlackBin.innerHTML = '';
-
+    deadWhiteBin.innerHTML = ''; deadBlackBin.innerHTML = '';
     for (let p in deadWhitePieces) {
         let count = deadWhitePieces[p];
         deadWhiteBin.innerHTML += `<div class="dead-piece">${p} ${count > 1 ? `<span class="count">x${count}</span>` : ''}</div>`;
@@ -141,81 +143,15 @@ function renderGraveyard() {
 }
 
 // ==========================================
-// RENDER PAPAN & INTERAKSI
+// MESIN CATUR FIDE: CEK SKAK & LANGKAH LEGAL
 // ==========================================
 function getPieceColor(piece) {
     if (!piece) return null;
     return ['♙', '♖', '♘', '♗', '♕', '♔'].includes(piece) ? 'putih' : 'hitam';
 }
 
-function renderBoard() {
-    boardElement.innerHTML = '';
-    for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-            const square = document.createElement('div');
-            square.className = `square ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
-            if (thyoBoard[r][c] !== '') square.innerHTML = `<div class="piece">${thyoBoard[r][c]}</div>`;
-            if (selectedSquare && selectedSquare.r === r && selectedSquare.c === c) square.classList.add('selected');
-            if (thyoValidMoves.some(m => m.r === r && m.c === c)) square.classList.add('valid-move');
-            square.onclick = () => handleSquareClick(r, c);
-            boardElement.appendChild(square);
-        }
-    }
-}
-
-function handleSquareClick(r, c) {
-    if (thyoMode === 'bot' && thyoTurn === 'hitam') return;
-
-    const clickedPiece = thyoBoard[r][c];
-    const clickedColor = getPieceColor(clickedPiece);
-
-    if (!timerInterval) startTimer();
-
-    // Pindah atau Makan
-    if (thyoValidMoves.some(m => m.r === r && m.c === c)) {
-        const targetPiece = thyoBoard[r][c];
-        
-        if (targetPiece) addDeadPiece(targetPiece);
-
-        thyoBoard[r][c] = thyoBoard[selectedSquare.r][selectedSquare.c];
-        thyoBoard[selectedSquare.r][selectedSquare.c] = '';
-        
-        thyoTurn = thyoTurn === 'putih' ? 'hitam' : 'putih';
-        turnStatus.textContent = thyoTurn.toUpperCase();
-        turnStatus.style.color = thyoTurn === 'putih' ? '#f6d365' : '#94a3b8';
-        
-        selectedSquare = null;
-        thyoValidMoves = [];
-        renderBoard();
-
-        if (thyoMode === 'bot' && thyoTurn === 'hitam') {
-            aiLoading.classList.remove('hidden'); 
-            let thinkTime = Math.floor(Math.random() * 1500) + 1000;
-            
-            setTimeout(() => {
-                makeBotMove();
-                aiLoading.classList.add('hidden'); 
-            }, thinkTime); 
-        }
-        return;
-    }
-
-    if (clickedColor === thyoTurn) {
-        selectedSquare = { r, c };
-        thyoValidMoves = getValidMovesForPiece(r, c, clickedPiece, thyoBoard);
-        renderBoard();
-        return;
-    }
-
-    selectedSquare = null;
-    thyoValidMoves = [];
-    renderBoard();
-}
-
-// ==========================================
-// ALGORITMA PERGERAKAN BIDAK
-// ==========================================
-function getValidMovesForPiece(r, c, piece, currentBoard) {
+// 1. Ambil langkah mentah (mengabaikan aturan skak diri sendiri)
+function getPseudoLegalMoves(r, c, piece, currentBoard) {
     let moves = [];
     const color = getPieceColor(piece);
     const dir = color === 'putih' ? -1 : 1; 
@@ -241,8 +177,8 @@ function getValidMovesForPiece(r, c, piece, currentBoard) {
                 if (!currentBoard[r + dir * 2][c]) moves.push({ r: r + dir * 2, c });
             }
         }
-        if (c - 1 >= 0 && currentBoard[r + dir][c - 1] && getPieceColor(currentBoard[r + dir][c - 1]) !== color) moves.push({ r: r + dir, c: c - 1 });
-        if (c + 1 < 8 && currentBoard[r + dir][c + 1] && getPieceColor(currentBoard[r + dir][c + 1]) !== color) moves.push({ r: r + dir, c: c + 1 });
+        if (c - 1 >= 0 && currentBoard[r + dir][c - 1] && getPieceColor(currentBoard[r + dir][c - 1]) !== color && currentBoard[r + dir][c - 1]) moves.push({ r: r + dir, c: c - 1 });
+        if (c + 1 < 8 && currentBoard[r + dir][c + 1] && getPieceColor(currentBoard[r + dir][c + 1]) !== color && currentBoard[r + dir][c + 1]) moves.push({ r: r + dir, c: c + 1 });
     }
 
     if (piece === '♖' || piece === '♜') addSliderMoves([[-1,0], [1,0], [0,-1], [0,1]]);
@@ -267,18 +203,67 @@ function getValidMovesForPiece(r, c, piece, currentBoard) {
     return moves;
 }
 
-function getAllPossibleMoves(color, currentBoard) {
+// 2. Cek apakah Raja warna tertentu sedang diserang
+function isKingInCheck(color, currentBoard) {
+    let kingR = -1, kingC = -1;
+    let kingPiece = color === 'putih' ? '♔' : '♚';
+    
+    for(let r=0; r<8; r++) {
+        for(let c=0; c<8; c++) {
+            if(currentBoard[r][c] === kingPiece) { kingR = r; kingC = c; break; }
+        }
+        if(kingR !== -1) break;
+    }
+
+    let enemyColor = color === 'putih' ? 'hitam' : 'putih';
+    for(let r=0; r<8; r++) {
+        for(let c=0; c<8; c++) {
+            let piece = currentBoard[r][c];
+            if(getPieceColor(piece) === enemyColor) {
+                let pseudoMoves = getPseudoLegalMoves(r, c, piece, currentBoard);
+                for(let m of pseudoMoves) {
+                    if(m.r === kingR && m.c === kingC) return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+// 3. Ambil langkah LEGAL (yang tidak menyebabkan Raja sendiri kena Skak)
+function getStrictLegalMoves(r, c, piece, currentBoard) {
+    let pseudoMoves = getPseudoLegalMoves(r, c, piece, currentBoard);
+    let legalMoves = [];
+    const color = getPieceColor(piece);
+
+    for (let move of pseudoMoves) {
+        // Simulasi jalan
+        let tempTarget = currentBoard[move.r][move.c];
+        currentBoard[move.r][move.c] = piece;
+        currentBoard[r][c] = '';
+
+        // Jika setelah jalan, raja tidak kena skak, maka langkah ini sah!
+        if (!isKingInCheck(color, currentBoard)) {
+            legalMoves.push(move);
+        }
+
+        // Kembalikan simulasi
+        currentBoard[r][c] = piece;
+        currentBoard[move.r][move.c] = tempTarget;
+    }
+    return legalMoves;
+}
+
+// 4. Ambil semua langkah legal dari satu kubu (untuk Bot & Deteksi Game Over)
+function getAllStrictMoves(color, currentBoard) {
     let allMoves = [];
     for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
             let piece = currentBoard[r][c];
             if (getPieceColor(piece) === color) {
-                let pMoves = getValidMovesForPiece(r, c, piece, currentBoard);
+                let pMoves = getStrictLegalMoves(r, c, piece, currentBoard);
                 for (let m of pMoves) {
-                    allMoves.push({
-                        fromR: r, fromC: c, toR: m.r, toC: m.c,
-                        piece: piece, target: currentBoard[m.r][m.c]
-                    });
+                    allMoves.push({ fromR: r, fromC: c, toR: m.r, toC: m.c, piece: piece, target: currentBoard[m.r][m.c] });
                 }
             }
         }
@@ -287,16 +272,101 @@ function getAllPossibleMoves(color, currentBoard) {
 }
 
 // ==========================================
-// OTAK BOT AI 
+// RENDER & INTERAKSI PEMAIN
 // ==========================================
-function makeBotMove() {
-    let allHitamMoves = getAllPossibleMoves('hitam', thyoBoard);
+function renderBoard() {
+    boardElement.innerHTML = '';
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            const square = document.createElement('div');
+            square.className = `square ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+            if (thyoBoard[r][c] !== '') square.innerHTML = `<div class="piece">${thyoBoard[r][c]}</div>`;
+            if (selectedSquare && selectedSquare.r === r && selectedSquare.c === c) square.classList.add('selected');
+            if (thyoValidMoves.some(m => m.r === r && m.c === c)) square.classList.add('valid-move');
+            square.onclick = () => handleSquareClick(r, c);
+            boardElement.appendChild(square);
+        }
+    }
+}
 
-    if (allHitamMoves.length === 0) {
-        gameOver("Permainan Selesai! Hitam tidak punya langkah.");
+function handleSquareClick(r, c) {
+    if (isGameOver) return;
+    if (thyoMode === 'bot' && thyoTurn === 'hitam') return;
+
+    const clickedPiece = thyoBoard[r][c];
+    const clickedColor = getPieceColor(clickedPiece);
+
+    if (!timerInterval) startTimer();
+
+    // Eksekusi Pindah/Makan
+    if (thyoValidMoves.some(m => m.r === r && m.c === c)) {
+        const targetPiece = thyoBoard[r][c];
+        if (targetPiece) addDeadPiece(targetPiece);
+
+        thyoBoard[r][c] = thyoBoard[selectedSquare.r][selectedSquare.c];
+        thyoBoard[selectedSquare.r][selectedSquare.c] = '';
+        
+        selectedSquare = null;
+        thyoValidMoves = [];
+        switchTurn();
         return;
     }
 
+    // Pilih Bidak
+    if (clickedColor === thyoTurn) {
+        selectedSquare = { r, c };
+        thyoValidMoves = getStrictLegalMoves(r, c, clickedPiece, thyoBoard);
+        renderBoard();
+        return;
+    }
+
+    selectedSquare = null;
+    thyoValidMoves = [];
+    renderBoard();
+}
+
+// Fungsi ganti giliran + Cek Checkmate/Stalemate
+function switchTurn() {
+    thyoTurn = thyoTurn === 'putih' ? 'hitam' : 'putih';
+    
+    // Cek apakah kubu yang mau jalan masih punya langkah
+    let availableMoves = getAllStrictMoves(thyoTurn, thyoBoard);
+    let inCheck = isKingInCheck(thyoTurn, thyoBoard);
+
+    if (availableMoves.length === 0) {
+        renderBoard(); // Render akhir
+        if (inCheck) {
+            let winner = thyoTurn === 'putih' ? 'Hitam' : 'Putih';
+            showGameOver("SKAKMAT!", `Permainan selesai. ${winner} berhasil mengunci Raja lawan.`);
+        } else {
+            showGameOver("REMIS!", "Stalemate. Raja tidak di-skak, tapi tidak ada langkah legal yang tersisa.");
+        }
+        return;
+    }
+
+    // Update Status UI
+    let skakWarning = inCheck ? ' <span style="color:#ef4444; font-weight:bold;">(SKAK!)</span>' : '';
+    turnStatus.innerHTML = thyoTurn.toUpperCase() + skakWarning;
+    turnStatus.style.color = thyoTurn === 'putih' ? '#f6d365' : '#94a3b8';
+    renderBoard();
+
+    // Panggil Bot jika perlu
+    if (thyoMode === 'bot' && thyoTurn === 'hitam' && !isGameOver) {
+        aiLoading.classList.remove('hidden'); 
+        let thinkTime = Math.floor(Math.random() * 1500) + 500;
+        setTimeout(() => {
+            makeBotMove();
+            aiLoading.classList.add('hidden'); 
+        }, thinkTime); 
+    }
+}
+
+// ==========================================
+// OTAK BOT AI
+// ==========================================
+function makeBotMove() {
+    if(isGameOver) return;
+    let allHitamMoves = getAllStrictMoves('hitam', thyoBoard);
     let bestMove = null;
 
     if (botLevel === 1) {
@@ -320,7 +390,6 @@ function makeBotMove() {
     else if (botLevel === 3) {
         let bestScore = -Infinity;
         allHitamMoves.sort(() => Math.random() - 0.5); 
-        
         for (let move of allHitamMoves) {
             let tempTarget = thyoBoard[move.toR][move.toC];
             thyoBoard[move.toR][move.toC] = move.piece;
@@ -331,10 +400,7 @@ function makeBotMove() {
             thyoBoard[move.fromR][move.fromC] = move.piece;
             thyoBoard[move.toR][move.toC] = tempTarget;
 
-            if (score > bestScore) {
-                bestScore = score;
-                bestMove = move;
-            }
+            if (score > bestScore) { bestScore = score; bestMove = move; }
         }
     }
 
@@ -347,12 +413,7 @@ function makeBotMove() {
     thyoBoard[r][c] = thyoBoard[bestMove.fromR][bestMove.fromC];
     thyoBoard[bestMove.fromR][bestMove.fromC] = '';
 
-    thyoTurn = 'putih';
-    turnStatus.textContent = thyoTurn.toUpperCase();
-    turnStatus.style.color = '#f6d365';
-    
-    selectedSquare = null;
-    renderBoard();
+    switchTurn();
 }
 
 function evaluateBoard(currentBoard) {
@@ -366,7 +427,6 @@ function evaluateBoard(currentBoard) {
             else if (piece === '♖' || piece === '♜') val = 50;
             else if (piece === '♗' || piece === '♝' || piece === '♘' || piece === '♞') val = 30;
             else if (piece === '♙' || piece === '♟') val = 10;
-            
             totalScore += getPieceColor(piece) === 'hitam' ? val : -val;
         }
     }
@@ -376,8 +436,15 @@ function evaluateBoard(currentBoard) {
 function minimax(simBoard, depth, isMaximizingPlayer, alpha, beta) {
     if (depth === 0) return evaluateBoard(simBoard);
 
-    let possibleMoves = getAllPossibleMoves(isMaximizingPlayer ? 'hitam' : 'putih', simBoard);
-    if (possibleMoves.length === 0) return isMaximizingPlayer ? -9999 : 9999; 
+    let possibleMoves = getAllStrictMoves(isMaximizingPlayer ? 'hitam' : 'putih', simBoard);
+    
+    // Evaluasi jika skakmat atau remis dalam simulasi
+    if (possibleMoves.length === 0) {
+        if(isKingInCheck(isMaximizingPlayer ? 'hitam' : 'putih', simBoard)) {
+            return isMaximizingPlayer ? -99999 : 99999; // Skakmat
+        }
+        return 0; // Stalemate
+    } 
 
     if (isMaximizingPlayer) {
         let maxEval = -Infinity;
@@ -435,6 +502,7 @@ toggleBtn.addEventListener('click', () => {
 // Ekspos fungsi ke global
 window.startGame = startGame;
 window.backToMenu = backToMenu;
+window.backToMenuFromModal = backToMenuFromModal;
 window.showBotMenu = showBotMenu;
 window.hideBotMenu = hideBotMenu;
 window.startBotGame = startBotGame;
